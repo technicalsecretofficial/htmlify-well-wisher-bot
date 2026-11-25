@@ -1,5 +1,14 @@
-from string import ascii_lowercase, ascii_uppercase
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+from requests import post
 
+from string import ascii_lowercase, ascii_uppercase
+from random import randint
+from pathlib import Path
+
+
+JINJA_ENV = Environment(loader=FileSystemLoader("templates"), autoescape=select_autoescape())
+
+HTMLIFY_API_BASE = "https://api.htmlify.me/v1"
 
 MONTH_MAP = {
     # 0: (shortname, fullname, maxdaycount)
@@ -23,6 +32,11 @@ def get_month_index_by_name(month: str) -> int: # 1 based index
         if month in MONTH_MAP[key]:
             return key
     return 0
+
+def get_month_maxdays_by_index(index: int) -> int:
+    if not 12 >= index >= 1:
+        return 0
+    return MONTH_MAP[index][2]
 
 
 def sanitize_date(date_input: str) -> str | None:
@@ -54,6 +68,10 @@ def sanitize_date(date_input: str) -> str | None:
         month = get_month_index_by_name(month)
     
     if not 12 >= month >= 1:
+        return None
+
+    max_month_days = get_month_maxdays_by_index(month)
+    if not max_month_days >= day >= 1:
         return None
 
     return f"{str(month).zfill(2)}-{str(day).zfill(2)}"
@@ -90,7 +108,6 @@ def sanitize_name(name_input: str) -> str | None:
     if len(name) > 255:
         return None
 
-    print("len:", len(name))
     return name
 
 
@@ -98,4 +115,41 @@ def sanitize_id(id_input: str) -> int | None:
     if not id_input.isnumeric():
         return None
     return int(id_input)
+
+
+def render_template(template_name: str, **kwargs) -> str:
+    """Render template, return rendered template as string"""
+    template = JINJA_ENV.get_template(template_name)
+    return template.render(**kwargs)
+
+
+def generate_template(template_name: str, **kwargs) -> Path:
+    """Generate template in a file and return file's path"""
+    rendered_template = render_template(template_name, **kwargs)
+    rfile_path = Path("generated").joinpath(str(randint(10**9,10**10-1))+"."+template_name)
+    with open(rfile_path, "w") as f:
+        f.write(rendered_template)
+    return rfile_path
+
+
+def htmlify_tmpfile(filepath: str | Path) -> str:
+    """Uploads file on `filepath` to HTMLify as temp file, returns public url"""
+
+    tmpfile_api_endpoint = HTMLIFY_API_BASE + "/tmpfiles"
+
+    filepath = Path(filepath)
+    if not filepath.exists():
+        raise FileNotFoundError()
+
+    file = open(filepath, "rb")
+    payload = {
+        'name': file.name,
+    }
+    files = {"file": (file.name, file)}
+
+    try:
+        r = post(tmpfile_api_endpoint, data=payload, files=files)
+        return r.json()["url"]
+    except:
+        return ""
 

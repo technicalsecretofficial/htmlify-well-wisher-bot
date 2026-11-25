@@ -7,8 +7,12 @@ from database.models.user import User
 from database.models import engine
 from time import sleep
 from utils import *
-import io
-import requests
+import os
+
+
+for rdir in ["generated"]:
+    if not os.path.exists(rdir):
+        os.mkdir(rdir)
 
 if not TOKEN:
     print("Set TOKEN environment varibale")
@@ -61,62 +65,9 @@ async def add(ctx, date: str = "",*, full_name: str = ""):
 @bot.hybrid_command()
 async def fetch(ctx):
     users = session.query(User).all()
-
-    rows_html = ""
-    for user in users:
-        rows_html += f"""
-        <tr class="border-b border-gray-200 hover:bg-gray-50">
-            <td class="py-3 px-6 text-left">{user.id}</td>
-            <td class="py-3 px-6 text-left font-medium">{user.full_name}</td>
-            <td class="py-3 px-6 text-left">{user.date_of_birth}</td>
-        </tr>
-        """
-        
-        html_content = f"""<html>
-                <head>
-                    <script src="https://cdn.tailwindcss.com"></script>
-                </head>
-                    <body>
-                <div class="max-w-4xl mx-auto bg-white shadow-md rounded-lg overflow-hidden">
-        <div class="px-6 py-4 bg-gray-800 text-white">
-            <h1 class="text-xl font-bold">Birthday List</h1>
-        </div>
-        <table class="min-w-full leading-normal">
-            <thead>
-                <tr class="bg-gray-200 text-gray-600 uppercase text-sm leading-normal">
-                    <th class="py-3 px-6 text-left">ID</th>
-                    <th class="py-3 px-6 text-left">Name</th>
-                    <th class="py-3 px-6 text-left">Birthday</th>
-                </tr>
-            </thead>
-            <tbody class="text-gray-700 text-sm">
-                {rows_html}
-            </tbody>
-        </table>
-    </div>
-                </body>
-                </html> """
-        
-    filename = "fetch.html"
-    with open(filename, "w", encoding = "utf-8") as f:
-                f.write(html_content)
-
-    
-    url = 'https://api.htmlify.me/v1/tmpfiles'
-    payload = { 'name': filename, 'expiry': 100000  }
-    
-    with open(filename, "rb") as f:
-         files = {"file": (filename, f, 'text/html')}
-         print(f)
-         r = requests.post(url, data=payload, files=files)
-
-    # print(files)
-    # sleep(0.6)
-
-    data = r.json()
-    link = data.get("url")
-    await ctx.send(link)
-    # await ctx.send("Here is the exported birthday table:", file=discord_file)
+    users_html = generate_template("users-table.html", users=users)
+    tmp_url = htmlify_tmpfile(users_html)
+    await ctx.send("Here is the exported birthday list:\n" + tmp_url)
 
 #get user 
 @bot.hybrid_command()
